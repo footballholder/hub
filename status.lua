@@ -1,5 +1,5 @@
 -- status
 return {
-    enabled = true,
+    enabled = false,
     message = "Football Hub is temporarily offline. Check the Discord for updates.",
 }
