@@ -2820,4 +2820,219 @@ local function buildTouchline(tab)
     addSlider(tab, "TLGkHitRadius", { Text = "Hit radius", Default = T.gk.hitRadius, Min = 2, Max = 15, Callback = function(v) T.gk.hitRadius = v end })
 
     tab:CreateSection("Ball Prediction")
-    addToggle(tab, "TLPred", { Text = "Enable prediction", Default = T.prediction.enabled, Callback = function(
+    addToggle(tab, "TLPred", { Text = "Enable prediction", Default = T.prediction.enabled, Callback = function(v) T.prediction.enabled = v end })
+    addSlider(tab, "TLPredTouch", { Text = "Reachable threshold", Default = T.prediction.touch, Min = 2, Max = 12, Callback = function(v) T.prediction.touch = v end })
+    addSlider(tab, "TLPredRange", { Text = "Track range", Default = T.prediction.range, Min = 5, Max = 40, Callback = function(v) T.prediction.range = v end })
+    addSlider(tab, "TLPredAhead", { Text = "Predict ahead", Default = math.floor(T.prediction.ahead * 10), Min = 5, Max = 30, Callback = function(v) T.prediction.ahead = v / 10 end })
+
+    tab:CreateSection("Extras")
+    addToggle(tab, "TLJump", { Text = "Custom jump power", Default = T.jump.enabled, Callback = function(v) T.jump.enabled = v end })
+    addSlider(tab, "TLJumpPower", { Text = "Jump power", Default = T.jump.power, Min = 50, Max = 100, Callback = function(v) T.jump.power = v end })
+    addToggle(tab, "TLDribble", { Text = "INF dribble", Default = T.dribble.enabled, Callback = function(v) T.dribble.enabled = v end })
+    addSlider(tab, "TLDribbleSpeed", { Text = "Dribble speed", Default = T.dribble.speed, Min = 8, Max = 35, Callback = function(v) T.dribble.speed = v end })
+    addToggle(tab, "TLAir1", { Text = "Air dribble M1", Default = T.airDribble1.enabled, Callback = function(v) T.airDribble1.enabled = v end })
+    addSlider(tab, "TLAir1Size", { Text = "M1 platform size", Default = T.airDribble1.size, Min = 1, Max = 100, Callback = function(v) T.airDribble1.size = v end })
+    addSlider(tab, "TLAir1Y", { Text = "M1 y offset", Default = T.airDribble1.yOffset, Min = 0.5, Max = 5, Increment = 0.5, Callback = function(v) T.airDribble1.yOffset = v end })
+    addToggle(tab, "TLAir1Show", { Text = "Show M1 platform", Default = T.airDribble1.visible, Callback = function(v) T.airDribble1.visible = v end })
+    addToggle(tab, "TLAir2", { Text = "Air dribble M2", Default = T.airDribble2.enabled, Callback = function(v) T.airDribble2.enabled = v end })
+    addSlider(tab, "TLAir2Size", { Text = "M2 platform size", Default = T.airDribble2.size, Min = 1, Max = 50, Callback = function(v) T.airDribble2.size = v end })
+    addToggle(tab, "TLAir2Show", { Text = "Show M2 platform", Default = T.airDribble2.visible, Callback = function(v) T.airDribble2.visible = v end })
+    addToggle(tab, "TLFling", { Text = "Ball fling", Default = T.ballFling.enabled, Callback = function(v) T.ballFling.enabled = v end })
+    addSlider(tab, "TLFlingReach", { Text = "Fling reach", Default = T.ballFling.reach, Min = 1, Max = 15, Callback = function(v) T.ballFling.reach = v end })
+    tab:CreateTextbox({
+        Name = "Avatar stealer",
+        PlaceholderText = "Username...",
+        Flag = "TLAvatarUser",
+        Callback = function(text)
+            text = text:gsub("^%s*(.-)%s*$", "%1")
+            if text == "" then return end
+            local Players = game:GetService("Players")
+            local ok, userId = pcall(function() return Players:GetUserIdFromNameAsync(text) end)
+            if ok and userId then
+                pcall(function() stealAvatar(userId, Players.LocalPlayer.Character) end)
+                notify("Avatar stealer", "Stole " .. text .. "'s avatar")
+            else
+                notify("Avatar stealer", "User not found")
+            end
+        end,
+    })
+    -- never replay the saved username when the config loads
+    Library.Flags.TLAvatarUser = nil
+    Library.FlagCallbacks.TLAvatarUser = function() end
+
+    tab:CreateSection("Moss & Misc")
+    addDropdown(tab, "TLMossLevel", {
+        Text = "Moss amount",
+        Options = LEVELS,
+        Default = LEVELS[T.moss.level] or "25%",
+        Callback = function(v) T.moss.level = levelValue(v, LEVELS) end,
+    })
+    addToggle(tab, "TLMoss", { Text = "Moss enabled", Default = T.moss.enabled, Callback = function(v) T.moss.enabled = v end })
+    addToggle(tab, "TLPingSpoof", { Text = "Ping spoof", Default = T.moss.pingSpoof, Callback = function(v) T.moss.pingSpoof = v end })
+
+    tab:CreateSection("Skys")
+    local function skyBtn(text, key)
+        addButton(tab, text, function()
+            local fn = env.FootballHub.touchlineSky and env.FootballHub.touchlineSky[key]
+            if type(fn) == "function" then pcall(fn) end
+        end)
+    end
+    skyBtn("Night sky", "night")
+    skyBtn("Sakura sky", "sakura")
+    skyBtn("Purple night", "purpleNight")
+    skyBtn("Gray sky", "gray")
+    skyBtn("Pinkie preppy", "pinkie")
+    skyBtn("Reset sky", "reset")
+end
+
+-- ---------------------------------------------------------------------------
+-- VRA menu
+-- ---------------------------------------------------------------------------
+
+local function buildVRA(tab)
+    tab:CreateSection("VRA/Overtime")
+    tab:CreateLabel("The VRA/Overtime script is a spoofer for the game with no configurable options")
+end
+
+-- ---------------------------------------------------------------------------
+-- menu wiring
+-- ---------------------------------------------------------------------------
+
+local function menuGui()
+    return Library.Raw and Library.Raw.ScreenGui
+end
+
+local function toggleMenu()
+    pcall(function()
+        Library.Raw:Toggle()
+    end)
+end
+
+local function buildSettings(g)
+    if settingsBuilt[g.key] then return end
+    settingsBuilt[g.key] = true
+
+    local tab = Window:CreateTab(g.short)
+    if g.key == "tps" then
+        buildTPS(tab)
+    elseif g.key == "tpl" then
+        buildTPL(tab)
+    elseif g.key == "touchline" then
+        buildTouchline(tab)
+    else
+        buildVRA(tab)
+    end
+    Library:Load()
+    return tab
+end
+
+local function buildScriptsTab()
+    if scriptsTab then return end
+
+    scriptsTab = Window:CreateTab("Scripts")
+    scriptsTab:CreateSection("Manual load")
+    for _, g in ipairs(GAMES) do
+        addButton(scriptsTab, g.name, function()
+            buildSettings(g)
+            runGame(g, { force = true })
+        end)
+    end
+    return scriptsTab
+end
+
+runGame = function(g, opts)
+    opts = opts or {}
+    if not g then return end
+
+    local key = "FootballHub_" .. g.key
+    if env[key] and not opts.force then
+        setStatus("Already running")
+        return
+    end
+
+    env[key] = true
+    setStatus("Loading...")
+
+    task.spawn(function()
+        local ok, err = pcall(g.run)
+        if ok then
+            setStatus("Running")
+            notify("Loaded", g.name)
+        else
+            setStatus("Failed to load")
+            notify("Load failed", tostring(err))
+            buildScriptsTab()
+        end
+    end)
+end
+
+-- the first tab built is the one Obsidian opens on
+local startTab
+if detected then
+    startTab = buildSettings(detected)
+else
+    startTab = buildScriptsTab()
+end
+
+local home = Window:CreateTab("Home")
+home:CreateSection("Status")
+home:CreateLabel(detected and detected.name or "No game detected")
+statusLabel = home:CreateLabel(detected and "Idle" or "Open the Scripts tab")
+addButton(home, "Reload script", function()
+    runGame(detected, { force = true })
+end)
+
+selectTab(startTab)
+
+local uiTab = Window:CreateTab("UI")
+uiTab:CreateSection("Menu")
+addButton(uiTab, "Hide menu", function()
+    toggleMenu()
+end)
+
+if Library.BuildExtraSettings then
+    Library:BuildExtraSettings(uiTab)
+end
+
+if Library.ApplyThemeUI then
+    Library:ApplyThemeUI(uiTab)
+else
+    uiTab:CreateSection("Theme")
+    for _, name in ipairs({ "Football", "Obsidian", "Midnight", "Mint", "Ocean" }) do
+        addButton(uiTab, name, function()
+            Library:SetTheme(name)
+        end)
+    end
+end
+
+uiTab:CreateSection("Socials")
+addButton(uiTab, "Copy Discord invite", function()
+    if setclipboard then
+        setclipboard(DISCORD)
+        notify("Discord", "Invite copied to clipboard")
+    end
+end)
+
+-- replay the saved config now that every element exists
+Library:Load()
+
+if Library.ShowIssues then
+    Library:ShowIssues()
+end
+
+if AUTOLOAD and detected then
+    runGame(detected)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
