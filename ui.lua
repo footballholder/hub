@@ -1,4 +1,5 @@
 -- Football Hub UI
+-- custom ui
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -24,6 +25,8 @@ end
 local canTruncate = pcall(function()
 	local probe = Instance.new("TextLabel")
 	probe.TextTruncate = Enum.TextTruncate.AtEnd
+	local probe2 = Instance.new("TextButton")
+	probe2.TextTruncate = Enum.TextTruncate.AtEnd
 end)
 
 local function new(class, props)
@@ -709,9 +712,6 @@ function Library:CreateWindow(options)
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Parent = ParentGui,
 	})
-	if syn and syn.protect_gui then
-		pcall(syn.protect_gui, gui)
-	end
 
 	local size = typeof(options.Size) == "UDim2" and options.Size or UDim2.new(0, 650, 0, 430)
 	local pos = typeof(options.Position) == "UDim2" and options.Position or UDim2.new(0.5, 0, 0.5, 0)
