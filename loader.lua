@@ -1,4 +1,3 @@
-
 -- Football Hub
 -- detects the game by PlaceId and loads the matching script behind one menu
 
@@ -31,6 +30,45 @@ if statusSource then
         return
     end
 end
+
+-- proof of life: if this box is still on screen the hub never reached the end of
+-- the file, which means the copy that ran was cut short (delete this block later)
+local BOOT_GUI
+do
+    local parent = (gethui and gethui()) or game:GetService("CoreGui")
+
+    pcall(function()
+        local old = parent:FindFirstChild("FootballHubBoot")
+        if old then old:Destroy() end
+    end)
+
+    BOOT_GUI = Instance.new("ScreenGui")
+    BOOT_GUI.Name = "FootballHubBoot"
+    BOOT_GUI.ResetOnSpawn = false
+    BOOT_GUI.IgnoreGuiInset = true
+    BOOT_GUI.DisplayOrder = 9999
+    BOOT_GUI.Parent = parent
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 380, 0, 34)
+    frame.Position = UDim2.new(0, 12, 0, 12)
+    frame.BackgroundColor3 = Color3.fromRGB(14, 34, 18)
+    frame.BorderSizePixel = 0
+    frame.Parent = BOOT_GUI
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -12, 1, 0)
+    label.Position = UDim2.new(0, 6, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.Code
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextColor3 = Color3.fromRGB(170, 255, 190)
+    label.Text = "Football Hub v" .. VERSION .. ": whole file ran, building menu"
+    label.Parent = frame
+end
+
+print("[Football Hub] v" .. VERSION .. " loaded, building menu")
 
 local env = (getgenv and getgenv()) or _G
 env.FootballHub = env.FootballHub or {}
@@ -1916,11 +1954,10 @@ if not detected then
 end
 
 -- the menu loads as its own chunk - this is the arrangement that runs on weak executors
--- Nebula UI v1.4 by SugaDev / SugaBlaz - https://github.com/SugaBlaz/UI-Library
+-- Obsidian UI by deividcomsono - https://github.com/deividcomsono/Obsidian
 
 local MENU_URLS = {
-    "https://raw.githubusercontent.com/SugaBlaz/UI-Library/refs/heads/main/Nebula%20UI.lua",
-    "https://cdn.jsdelivr.net/gh/SugaBlaz/UI-Library@main/Nebula%20UI.lua",
+    "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/Library.lua",
 }
 
 local function loadMenu()
@@ -1934,7 +1971,377 @@ local function loadMenu()
     end
 end
 
-local Library = loadMenu()
+local Raw = loadMenu()
+local ThemeManager
+local Library
+
+local ISSUES = {}
+
+local function issue(msg)
+    table.insert(ISSUES, tostring(msg))
+    warn("[Football Hub] " .. tostring(msg))
+end
+
+if Raw then
+    pcall(function()
+        ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/deividcomsono/Obsidian/main/addons/ThemeManager.lua"))()
+    end)
+
+    if not ThemeManager then
+        issue("the theme addon did not load")
+    end
+    -- Obsidian files every element under Options (switches under Toggles), so the hub can
+    -- keep talking to the same little API it already used
+    local SAVE_FILE = "FootballHub.json"
+
+    local COLORS = {
+        Football = { Accent = Color3.fromRGB(60, 220, 130), Main = Color3.fromRGB(17, 19, 23), Background = Color3.fromRGB(11, 13, 16), Outline = Color3.fromRGB(28, 32, 38) },
+        Obsidian = { Accent = Color3.fromRGB(235, 235, 235), Main = Color3.fromRGB(12, 12, 12), Background = Color3.fromRGB(6, 6, 6), Outline = Color3.fromRGB(24, 24, 24) },
+        Midnight = { Accent = Color3.fromRGB(138, 43, 226), Main = Color3.fromRGB(18, 18, 28), Background = Color3.fromRGB(12, 12, 20), Outline = Color3.fromRGB(30, 30, 45) },
+        Mint = { Accent = Color3.fromRGB(0, 255, 150), Main = Color3.fromRGB(25, 28, 25), Background = Color3.fromRGB(18, 20, 18), Outline = Color3.fromRGB(35, 40, 35) },
+        Ocean = { Accent = Color3.fromRGB(40, 180, 255), Main = Color3.fromRGB(15, 25, 35), Background = Color3.fromRGB(10, 18, 25), Outline = Color3.fromRGB(25, 40, 55) },
+    }
+
+    local function element(flag)
+        return Raw.Toggles[flag] or Raw.Options[flag]
+    end
+
+    local function valueOf(el)
+        local v = el.Value
+        if type(v) == "table" and v.Key ~= nil then return v.Key end
+        return v
+    end
+
+    local function savable(v)
+        local t = type(v)
+        return t == "string" or t == "number" or t == "boolean" or t == "table"
+    end
+
+    local function save()
+        pcall(function()
+            local data = {}
+            for flag, el in pairs(Raw.Toggles) do
+                local v = valueOf(el)
+                if savable(v) then data[flag] = v end
+            end
+            for flag, el in pairs(Raw.Options) do
+                local v = valueOf(el)
+                if savable(v) then data[flag] = v end
+            end
+            writefile(SAVE_FILE, game:GetService("HttpService"):JSONEncode(data))
+        end)
+    end
+
+    local function load()
+        local data
+        pcall(function()
+            if isfile and isfile(SAVE_FILE) then
+                data = game:GetService("HttpService"):JSONDecode(readfile(SAVE_FILE))
+            end
+        end)
+        if type(data) ~= "table" then return end
+        for flag, saved in pairs(data) do
+            local el = element(flag)
+            if el and el.SetValue then
+                pcall(function()
+                    if type(el.Value) == "table" and type(saved) == "string" then
+                        el:SetValue({ Key = saved, Mode = el.Value.Mode, ActiveModifiers = el.Value.ActiveModifiers })
+                    else
+                        el:SetValue(saved)
+                    end
+                end)
+            end
+        end
+    end
+
+    local Flags = setmetatable({}, {
+        __index = function(_, flag)
+            local el = element(flag)
+            if el then return valueOf(el) end
+        end,
+        __newindex = function() end,
+    })
+
+    local FlagCallbacks = setmetatable({}, {
+        __newindex = function(_, flag, fn)
+            local el = element(flag)
+            if el then el.Callback = fn end
+        end,
+    })
+
+    local function wrap(el, setter)
+        return { Set = function(_, v) pcall(function() setter(el, v) end) end, Raw = el }
+    end
+
+    -- a menu that fails to build must never take the hub down with it
+    local function stub()
+        return setmetatable({}, {
+            __index = function() return function() return stub() end end,
+            __newindex = function() end,
+        })
+    end
+
+    local Tab = {}
+    Tab.__index = Tab
+
+    function Tab:box()
+        if self.Box then return self.Box end
+        return self:CreateSection("Options") or stub()
+    end
+
+    function Tab:CreateSection(name)
+        -- alternate so the second column gets used instead of sitting empty
+        self.Side = (self.Side == "Left") and "Right" or "Left"
+
+        local ok, box = pcall(function()
+            return self.Raw:AddGroupbox({ Side = self.Side, Name = name })
+        end)
+
+        if not ok or type(box) ~= "table" then
+            issue("section '" .. tostring(name) .. "' failed on the " .. self.Side .. " side: " .. tostring(box))
+
+            ok, box = pcall(function()
+                return self.Raw:AddGroupbox({ Name = name })
+            end)
+        end
+
+        if not ok or type(box) ~= "table" then
+            issue("section '" .. tostring(name) .. "' could not be created at all")
+            return nil
+        end
+
+        self.Box = box
+        return box
+    end
+
+    function Tab:CreateToggle(o)
+        return wrap(self:box():AddToggle(o.Flag, { Text = o.Name, Default = o.CurrentValue, Callback = o.Callback }), function(el, v) el:SetValue(v) end)
+    end
+
+    function Tab:CreateSlider(o)
+        return wrap(self:box():AddSlider(o.Flag, {
+            Text = o.Name,
+            Default = o.CurrentValue,
+            Min = o.Range[1],
+            Max = o.Range[2],
+            Rounding = o.Increment or 1,
+            Callback = o.Callback,
+        }), function(el, v) el:SetValue(v) end)
+    end
+
+    function Tab:CreateDropdown(o)
+        return wrap(self:box():AddDropdown(o.Flag, { Text = o.Name, Values = o.Options, Default = o.CurrentOption, Callback = o.Callback }), function(el, v) el:SetValue(v) end)
+    end
+
+    function Tab:CreateButton(o)
+        return self:box():AddButton({ Text = o.Name, Func = o.Callback })
+    end
+
+    function Tab:CreateLabel(text)
+        return wrap(self:box():AddLabel(text, true), function(el, v) el:SetText(v) end)
+    end
+
+    function Tab:CreateTextbox(o)
+        return wrap(self:box():AddInput(o.Flag, { Text = o.Name, Placeholder = o.PlaceholderText, Callback = o.Callback }), function(el, v) el:SetValue(v) end)
+    end
+
+    function Tab:CreateKeybind(o)
+        local lbl = self:box():AddLabel(o.Name, true)
+        return wrap(lbl:AddKeyPicker(o.Flag, { Text = o.Name, Default = o.CurrentKey, Mode = "Press", Callback = o.Callback }), function(el, v) el:SetValue(v) end)
+    end
+
+    Library = {
+        Raw = Raw,
+        Flags = Flags,
+        FlagCallbacks = FlagCallbacks,
+        Themes = COLORS,
+        CurrentTheme = "Football",
+    }
+
+    function Library:AddCustomTheme() end
+
+    function Library:SetTheme(name)
+        if ThemeManager then
+            local ok, applied = pcall(function() return ThemeManager:ApplyTheme(name) end)
+            if ok and applied then return end
+        end
+        local c = COLORS[name] or COLORS.Football
+        pcall(function()
+            Raw.Scheme.AccentColor = c.Accent
+            Raw.Scheme.MainColor = c.Main
+            Raw.Scheme.BackgroundColor = c.Background
+            Raw.Scheme.OutlineColor = c.Outline
+            Raw:UpdateColorsUsingRegistry()
+        end)
+    end
+
+    function Library:Save() save() end
+    function Library:Load() load() end
+    function Library:SelectTab() end
+
+    function Library:Destroy()
+        pcall(function() Raw:Unload() end)
+    end
+
+    Library.Unload = Library.Destroy
+
+    function Library:Notify(o)
+        pcall(function()
+            Raw:Notify({
+                Title = o and o.Title or "",
+                Description = o and o.Text or "",
+                Time = o and o.Duration or 4,
+            })
+        end)
+    end
+
+    function Library:BuildExtraSettings(tab)
+        tab:CreateSection("Window")
+        tab:CreateSlider({
+            Name = "Corner radius",
+            CurrentValue = Raw.CornerRadius or 4,
+            Range = { 0, 20 },
+            Flag = "UICornerRadius",
+            Callback = function(v)
+                pcall(function() Library.WindowRaw:SetCornerRadius(v) end)
+            end,
+        })
+        tab:CreateDropdown({
+            Name = "Menu scale",
+            Options = { "50%", "75%", "100%", "125%", "150%", "175%", "200%" },
+            CurrentOption = "100%",
+            Flag = "UIMenuScale",
+            Callback = function(v)
+                pcall(function() Raw:SetDPIScale(tonumber(string.match(v, "%d+"))) end)
+            end,
+        })
+        tab:CreateDropdown({
+            Name = "Notifications",
+            Options = { "Left", "Right" },
+            CurrentOption = "Right",
+            Flag = "UINotifySide",
+            Callback = function(v)
+                pcall(function() Raw:SetNotifySide(v) end)
+            end,
+        })
+        tab:CreateToggle({
+            Name = "Always on top",
+            CurrentValue = false,
+            Flag = "UIAlwaysOnTop",
+            Callback = function(v)
+                pcall(function() Library.WindowRaw:SetAlwaysOnTop(v) end)
+            end,
+        })
+        tab:CreateToggle({
+            Name = "Custom cursor",
+            CurrentValue = true,
+            Flag = "UICustomCursor",
+            Callback = function(v)
+                pcall(function() Raw.ShowCustomCursor = v end)
+            end,
+        })
+    end
+
+    if ThemeManager then
+        function Library:ApplyThemeUI(tab)
+            local ok, err = pcall(function()
+                ThemeManager:SetLibrary(Raw)
+                ThemeManager:SetFolder("FootballHub")
+                ThemeManager:ApplyToTab(tab.Raw, "palette")
+                ThemeManager:ApplyTheme("Default")
+            end)
+
+            if not ok then
+                issue("the theme panel failed: " .. tostring(err))
+            end
+        end
+    end
+
+    function Library:ShowIssues()
+        if BOOT_GUI then
+            BOOT_GUI:Destroy()
+            BOOT_GUI = nil
+        end
+
+        print("[Football Hub] menu built, " .. tostring(#ISSUES) .. " issue(s)")
+
+        if #ISSUES == 0 then return end
+
+        local parent = (gethui and gethui()) or game:GetService("CoreGui")
+
+        local gui = Instance.new("ScreenGui")
+        gui.Name = "FootballHubIssues"
+        gui.ResetOnSpawn = false
+        gui.IgnoreGuiInset = true
+        gui.DisplayOrder = 9999
+        gui.Parent = parent
+
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(0, 620, 0, 32 + #ISSUES * 18)
+        frame.Position = UDim2.new(0, 12, 0, 12)
+        frame.BackgroundColor3 = Color3.fromRGB(38, 12, 12)
+        frame.BorderSizePixel = 0
+        frame.Parent = gui
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, -20, 1, -20)
+        label.Position = UDim2.new(0, 10, 0, 10)
+        label.BackgroundTransparency = 1
+        label.Font = Enum.Font.Code
+        label.TextSize = 14
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextYAlignment = Enum.TextYAlignment.Top
+        label.TextWrapped = true
+        label.TextColor3 = Color3.fromRGB(255, 175, 175)
+        label.Text = "Football Hub menu issues:\n" .. table.concat(ISSUES, "\n")
+        label.Parent = frame
+    end
+
+    function Library:CreateWindow(o)
+        local ok, win = pcall(function()
+            return Raw:CreateWindow({
+                Title = o.Name,
+                Footer = "v" .. VERSION,
+                NotifySide = "Right",
+                Center = true,
+                Resizable = true,
+            })
+        end)
+
+        if not ok or type(win) ~= "table" then
+            issue("the window could not be created: " .. tostring(win))
+            return stub()
+        end
+
+        local window = { Raw = win, Tabs = {} }
+
+        local ICONS = { Home = "home", UI = "settings", Scripts = "scroll-text" }
+
+        function window:CreateTab(name)
+            local icon = ICONS[name] or "target"
+
+            local ok, raw = pcall(function() return win:AddTab(name, icon) end)
+
+            if not ok or type(raw) ~= "table" then
+                issue("tab '" .. tostring(name) .. "' failed with the '" .. icon .. "' icon: " .. tostring(raw))
+
+                ok, raw = pcall(function() return win:AddTab(name) end)
+            end
+
+            if not ok or type(raw) ~= "table" then
+                issue("tab '" .. tostring(name) .. "' could not be created")
+                return stub()
+            end
+
+            local t = setmetatable({ Raw = raw }, Tab)
+            table.insert(window.Tabs, t)
+            return t
+        end
+
+        Library.WindowRaw = win
+        return window
+    end
+end
 
 if not Library then
     warn("[Football Hub] menu library did not load, running without a menu")
@@ -1956,6 +2363,9 @@ if env.FootballHub.library then
         end
     end)
 end
+
+-- the outgoing instance clears the library's global on its way out, so hand it back
+pcall(function() getgenv().Library = Raw end)
 env.FootballHub.library = Library
 
 Library:AddCustomTheme("Football", {
@@ -2050,13 +2460,6 @@ local function addKey(tab, flag, name, defaultKey, onPress)
     return el
 end
 
-local function addToggleWithKey(tab, flag, opts, keyFlag, keyName, keyDefault)
-    local el = addToggle(tab, flag, opts)
-    addKey(tab, keyFlag, keyName, keyDefault, function()
-        el:Set(not Library.Flags[flag])
-    end)
-    return el
-end
 
 local function notify(title, content)
     pcall(function()
@@ -2072,19 +2475,11 @@ local function setStatus(text)
     end
 end
 
--- opens the menu on a chosen tab instead of the first one
+-- Obsidian picks the tab itself, this only keeps the call sites working
 local function selectTab(tab)
     if not tab then return end
     pcall(function()
-        for _, t in pairs(Window.Tabs) do
-            t.Content.Visible = false
-            t.Btn.BackgroundTransparency = 1
-            t.Btn.TextColor3 = Library.Themes[Library.CurrentTheme].TextDark
-        end
-        tab.Content.Visible = true
-        tab.Btn.BackgroundTransparency = 0
-        tab.Btn.TextColor3 = Library.Themes[Library.CurrentTheme].Text
-        Window.CurrentTab = tab
+        Library:SelectTab(tab)
     end)
 end
 
@@ -2096,11 +2491,11 @@ local function buildTPS(tab)
     local T = SETTINGS.TPS
 
     tab:CreateSection("Reach")
-    addToggleWithKey(tab, "TPSReachEnabled", {
+    addToggle(tab, "TPSReachEnabled", {
         Text = "Reach enabled",
         Default = T.reachEnabled,
         Callback = function(v) T.reachEnabled = v end,
-    }, "TPSReachKey", "Toggle reach key", "K")
+    })
     addSlider(tab, "TPSGroundReach", {
         Text = "Ground reach",
         Default = T.groundReach,
@@ -2195,11 +2590,11 @@ local function buildTPS(tab)
     })
     addToggle(tab, "TPSMoss", { Text = "Moss enabled", Default = T.mossEnabled, Callback = function(v) T.mossEnabled = v end })
     addToggle(tab, "TPSPingSpoof", { Text = "Ping spoof", Default = T.pingSpoofEnabled, Callback = function(v) T.pingSpoofEnabled = v end })
-    addToggleWithKey(tab, "TPSCooldown", {
+    addToggle(tab, "TPSCooldown", {
         Text = "Cooldown remover",
         Default = T.cooldownRemover,
         Callback = function(v) T.cooldownRemover = v end,
-    }, "TPSCooldownKey", "Cooldown key", T.cooldownKeybind)
+    })
 
     tab:CreateSection("Skybox")
     addToggle(tab, "TPSAmbience", {
@@ -2282,11 +2677,11 @@ local function buildTPL(tab)
     local T = SETTINGS.TPL
 
     tab:CreateSection("Reach")
-    addToggleWithKey(tab, "TPLReach", {
+    addToggle(tab, "TPLReach", {
         Text = "Reach enabled",
         Default = T.Enabled,
         Callback = function(v) T.Enabled = v end,
-    }, "TPLReachKey", "Toggle reach key", "K")
+    })
     addSlider(tab, "TPLSize", {
         Text = "Ball reach size",
         Default = T.HorizontalSize,
@@ -2383,11 +2778,11 @@ local function buildTouchline(tab)
     })
 
     tab:CreateSection("Collision Reach")
-    addToggleWithKey(tab, "TLCollide", {
+    addToggle(tab, "TLCollide", {
         Text = "Collision reach",
         Default = T.reachCollide.enabled,
         Callback = function(v) T.reachCollide.enabled = v end,
-    }, "TLCollideKey", "Toggle reach key", "K")
+    })
     addSlider(tab, "TLCollideSize", {
         Text = "Reach size",
         Default = T.reachCollide.size,
@@ -2425,236 +2820,4 @@ local function buildTouchline(tab)
     addSlider(tab, "TLGkHitRadius", { Text = "Hit radius", Default = T.gk.hitRadius, Min = 2, Max = 15, Callback = function(v) T.gk.hitRadius = v end })
 
     tab:CreateSection("Ball Prediction")
-    addToggle(tab, "TLPred", { Text = "Enable prediction", Default = T.prediction.enabled, Callback = function(v) T.prediction.enabled = v end })
-    addSlider(tab, "TLPredTouch", { Text = "Reachable threshold", Default = T.prediction.touch, Min = 2, Max = 12, Callback = function(v) T.prediction.touch = v end })
-    addSlider(tab, "TLPredRange", { Text = "Track range", Default = T.prediction.range, Min = 5, Max = 40, Callback = function(v) T.prediction.range = v end })
-    addSlider(tab, "TLPredAhead", { Text = "Predict ahead", Default = math.floor(T.prediction.ahead * 10), Min = 5, Max = 30, Callback = function(v) T.prediction.ahead = v / 10 end })
-
-    tab:CreateSection("Extras")
-    addToggle(tab, "TLJump", { Text = "Custom jump power", Default = T.jump.enabled, Callback = function(v) T.jump.enabled = v end })
-    addSlider(tab, "TLJumpPower", { Text = "Jump power", Default = T.jump.power, Min = 50, Max = 100, Callback = function(v) T.jump.power = v end })
-    addToggle(tab, "TLDribble", { Text = "INF dribble", Default = T.dribble.enabled, Callback = function(v) T.dribble.enabled = v end })
-    addSlider(tab, "TLDribbleSpeed", { Text = "Dribble speed", Default = T.dribble.speed, Min = 8, Max = 35, Callback = function(v) T.dribble.speed = v end })
-    addToggle(tab, "TLAir1", { Text = "Air dribble M1", Default = T.airDribble1.enabled, Callback = function(v) T.airDribble1.enabled = v end })
-    addSlider(tab, "TLAir1Size", { Text = "M1 platform size", Default = T.airDribble1.size, Min = 1, Max = 100, Callback = function(v) T.airDribble1.size = v end })
-    addSlider(tab, "TLAir1Y", { Text = "M1 y offset", Default = T.airDribble1.yOffset, Min = 0.5, Max = 5, Increment = 0.5, Callback = function(v) T.airDribble1.yOffset = v end })
-    addToggle(tab, "TLAir1Show", { Text = "Show M1 platform", Default = T.airDribble1.visible, Callback = function(v) T.airDribble1.visible = v end })
-    addToggle(tab, "TLAir2", { Text = "Air dribble M2", Default = T.airDribble2.enabled, Callback = function(v) T.airDribble2.enabled = v end })
-    addSlider(tab, "TLAir2Size", { Text = "M2 platform size", Default = T.airDribble2.size, Min = 1, Max = 50, Callback = function(v) T.airDribble2.size = v end })
-    addToggle(tab, "TLAir2Show", { Text = "Show M2 platform", Default = T.airDribble2.visible, Callback = function(v) T.airDribble2.visible = v end })
-    addToggle(tab, "TLFling", { Text = "Ball fling", Default = T.ballFling.enabled, Callback = function(v) T.ballFling.enabled = v end })
-    addSlider(tab, "TLFlingReach", { Text = "Fling reach", Default = T.ballFling.reach, Min = 1, Max = 15, Callback = function(v) T.ballFling.reach = v end })
-    tab:CreateTextbox({
-        Name = "Avatar stealer",
-        PlaceholderText = "Username...",
-        Flag = "TLAvatarUser",
-        Callback = function(text)
-            text = text:gsub("^%s*(.-)%s*$", "%1")
-            if text == "" then return end
-            local Players = game:GetService("Players")
-            local ok, userId = pcall(function() return Players:GetUserIdFromNameAsync(text) end)
-            if ok and userId then
-                pcall(function() stealAvatar(userId, Players.LocalPlayer.Character) end)
-                notify("Avatar stealer", "Stole " .. text .. "'s avatar")
-            else
-                notify("Avatar stealer", "User not found")
-            end
-        end,
-    })
-    -- never replay the saved username when the config loads
-    Library.Flags.TLAvatarUser = nil
-    Library.FlagCallbacks.TLAvatarUser = function() end
-
-    tab:CreateSection("Moss & Misc")
-    addDropdown(tab, "TLMossLevel", {
-        Text = "Moss amount",
-        Options = LEVELS,
-        Default = LEVELS[T.moss.level] or "25%",
-        Callback = function(v) T.moss.level = levelValue(v, LEVELS) end,
-    })
-    addToggle(tab, "TLMoss", { Text = "Moss enabled", Default = T.moss.enabled, Callback = function(v) T.moss.enabled = v end })
-    addToggle(tab, "TLPingSpoof", { Text = "Ping spoof", Default = T.moss.pingSpoof, Callback = function(v) T.moss.pingSpoof = v end })
-
-    tab:CreateSection("Skys")
-    local function skyBtn(text, key)
-        addButton(tab, text, function()
-            local fn = env.FootballHub.touchlineSky and env.FootballHub.touchlineSky[key]
-            if type(fn) == "function" then pcall(fn) end
-        end)
-    end
-    skyBtn("Night sky", "night")
-    skyBtn("Sakura sky", "sakura")
-    skyBtn("Purple night", "purpleNight")
-    skyBtn("Gray sky", "gray")
-    skyBtn("Pinkie preppy", "pinkie")
-    skyBtn("Reset sky", "reset")
-end
-
--- ---------------------------------------------------------------------------
--- VRA menu
--- ---------------------------------------------------------------------------
-
-local function buildVRA(tab)
-    tab:CreateSection("VRA/Overtime")
-    tab:CreateLabel("The VRA/Overtime script is a spoofer for the game with no configurable options")
-end
-
--- ---------------------------------------------------------------------------
--- menu wiring
--- ---------------------------------------------------------------------------
-
-local function menuGui()
-    local roots = {}
-    if gethui then
-        local ok, hui = pcall(gethui)
-        if ok and hui then table.insert(roots, hui) end
-    end
-    pcall(function()
-        table.insert(roots, game:GetService("CoreGui"))
-    end)
-    for _, root in ipairs(roots) do
-        local found = root:FindFirstChild("Nebula")
-        if found then return found end
-    end
-end
-
-local function toggleMenu()
-    pcall(function()
-        local gui = menuGui()
-        if not gui then return end
-        local main
-        for _, child in ipairs(gui:GetChildren()) do
-            if child:IsA("Frame") and child:FindFirstChildOfClass("UIScale") then
-                main = child
-                break
-            end
-        end
-        if not main then return end
-        if main.Visible then
-            main.Visible = false
-        else
-            local scale = main:FindFirstChildOfClass("UIScale")
-            if scale then scale.Scale = 1 end
-            main.Visible = true
-        end
-    end)
-end
-
-local function buildSettings(g)
-    if settingsBuilt[g.key] then return end
-    settingsBuilt[g.key] = true
-
-    local tab = Window:CreateTab(g.short)
-    if g.key == "tps" then
-        buildTPS(tab)
-    elseif g.key == "tpl" then
-        buildTPL(tab)
-    elseif g.key == "touchline" then
-        buildTouchline(tab)
-    else
-        buildVRA(tab)
-    end
-    Library:Load()
-    return tab
-end
-
-local function buildScriptsTab()
-    if scriptsTab then return end
-
-    scriptsTab = Window:CreateTab("Scripts")
-    scriptsTab:CreateSection("Manual load")
-    for _, g in ipairs(GAMES) do
-        addButton(scriptsTab, g.name, function()
-            buildSettings(g)
-            runGame(g, { force = true })
-        end)
-    end
-    return scriptsTab
-end
-
-runGame = function(g, opts)
-    opts = opts or {}
-    if not g then return end
-
-    local key = "FootballHub_" .. g.key
-    if env[key] and not opts.force then
-        setStatus("Already running")
-        return
-    end
-
-    env[key] = true
-    setStatus("Loading...")
-
-    task.spawn(function()
-        local ok, err = pcall(g.run)
-        if ok then
-            setStatus("Running")
-            notify("Loaded", g.name)
-        else
-            setStatus("Failed to load")
-            notify("Load failed", tostring(err))
-            buildScriptsTab()
-        end
-    end)
-end
-
-local home = Window:CreateTab("Home")
-home:CreateSection("Status")
-home:CreateLabel(detected and detected.name or "No game detected")
-statusLabel = home:CreateLabel(detected and "Idle" or "Open the Scripts tab")
-addButton(home, "Reload script", function()
-    runGame(detected, { force = true })
-end)
-
-local startTab
-if detected then
-    startTab = buildSettings(detected)
-else
-    buildScriptsTab()
-    startTab = scriptsTab
-end
-selectTab(startTab)
-
-local uiTab = Window:CreateTab("UI")
-uiTab:CreateSection("Menu")
-addKey(uiTab, "MenuKeybind", "Menu key", "RightControl", function()
-    toggleMenu()
-end)
-addButton(uiTab, "Hide menu", function()
-    toggleMenu()
-end)
-
-uiTab:CreateSection("Theme")
-for _, name in ipairs({ "Football", "Obsidian", "Midnight", "Mint", "Ocean" }) do
-    addButton(uiTab, name, function()
-        Library:SetTheme(name)
-    end)
-end
-
-uiTab:CreateSection("Socials")
-addButton(uiTab, "Copy Discord invite", function()
-    if setclipboard then
-        setclipboard(DISCORD)
-        notify("Discord", "Invite copied to clipboard")
-    end
-end)
-
--- replay the saved config now that every element exists
-Library:Load()
-
-if AUTOLOAD and detected then
-    runGame(detected)
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
+    addToggle(tab, "TLPred", { Text = "Enable prediction", Default = T.prediction.enabled, Callback = function(
